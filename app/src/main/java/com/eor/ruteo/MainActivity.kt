@@ -17,20 +17,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eor.ruteo.data.ParadaViaje
 import com.eor.ruteo.data.ViajeIntegrado
-
 
 class MainActivity : ComponentActivity() {
     private val viewModel: RuteoViewModel by viewModels()
@@ -41,7 +38,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val state by viewModel.uiState.collectAsState()
-                    RuteoAppScreen(state = state)
+                    RuteoAppScreen(state = state, viewModel = viewModel)
                 }
             }
         }
@@ -50,7 +47,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun RuteoAppScreen(state: UiState) {
+fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
     when (state) {
         is UiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is UiState.Error -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error) }
@@ -62,15 +59,22 @@ fun RuteoAppScreen(state: UiState) {
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 )
 
-                val terminalesFijas = listOf("Plaza Huincul", "Dock Sud", "Sin Terminal")
+                // 👇 NUEVO: Pestaña "⭐ Guardados" integrada como primera opción de ruteo
+                val terminalesFijas = listOf("⭐ Guardados", "Plaza Huincul", "Dock Sud", "Sin Terminal")
                 var selectedTabIndex by remember { mutableIntStateOf(0) }
 
                 val tareasPendientes = state.dataRuteo.filter { !it.isCompletado }
+                val viajesGuardados by viewModel.viajesGuardados.collectAsState()
 
-                // Indicador visual numérico en las pestañas para reducir la carga de navegación
                 ScrollableTabRow(selectedTabIndex = selectedTabIndex, edgePadding = 16.dp) {
                     terminalesFijas.forEachIndexed { index, terminal ->
-                        val count = tareasPendientes.count { it.terminalOrigen == terminal }
+                        // Cálculo del indicador numérico dinámico por pestaña
+                        val count = if (terminal == "⭐ Guardados") {
+                            tareasPendientes.count { it.idUnico in viajesGuardados }
+                        } else {
+                            tareasPendientes.count { it.terminalOrigen == terminal }
+                        }
+
                         Tab(
                             selected = selectedTabIndex == index,
                             onClick = { selectedTabIndex = index },
@@ -95,11 +99,22 @@ fun RuteoAppScreen(state: UiState) {
                 }
 
                 val terminalSeleccionada = terminalesFijas[selectedTabIndex]
-                val viajesDeEstaTerminal = tareasPendientes.filter { it.terminalOrigen == terminalSeleccionada }
+
+                // 👇 Filtrado inteligente reactivo a la pestaña activa
+                val viajesDeEstaTerminal = if (terminalSeleccionada == "⭐ Guardados") {
+                    tareasPendientes.filter { it.idUnico in viajesGuardados }
+                } else {
+                    tareasPendientes.filter { it.terminalOrigen == terminalSeleccionada }
+                }
 
                 if (viajesDeEstaTerminal.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
-                        Text("No hay viajes para $terminalSeleccionada", color = MaterialTheme.colorScheme.outline)
+                        val mensajeVacio = if (terminalSeleccionada == "⭐ Guardados") {
+                            "No has guardado ningún viaje para seguimiento local"
+                        } else {
+                            "No hay viajes para $terminalSeleccionada"
+                        }
+                        Text(mensajeVacio, color = MaterialTheme.colorScheme.outline)
                     }
                 } else {
                     val dataAgrupada = viajesDeEstaTerminal.groupBy { it.fechaPlanificada }
@@ -122,7 +137,12 @@ fun RuteoAppScreen(state: UiState) {
                             }
 
                             items(tareas, key = { it.idUnico }) { tarea ->
-                                ViajeCardExpandible(tarea)
+                                val isGuardado = tarea.idUnico in viajesGuardados
+                                ViajeCardExpandible(
+                                    viaje = tarea,
+                                    isGuardado = isGuardado,
+                                    onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
+                                )
                             }
                         }
                     }
@@ -133,17 +153,41 @@ fun RuteoAppScreen(state: UiState) {
 }
 
 @Composable
-fun ViajeCardExpandible(viaje: ViajeIntegrado) {
+fun ViajeCardExpandible(
+    viaje: ViajeIntegrado,
+    isGuardado: Boolean,
+    onGuardarToggle: () -> Unit
+) {
     var isExpanded by remember { mutableStateOf(false) }
 
-    // Colores por defecto del tema para cuando no hay degradado definido en el Excel
+    // Paleta de colores pastel inmutable para los bloques de clientes
+    val pastelPalette = remember {
+        listOf(
+            Color(0xFFF1F8E9), // Verde suave
+            Color(0xFFE3F2FD), // Azul suave
+            Color(0xFFFFFDE7), // Amarillo suave
+            Color(0xFFF3E5F5), // Lila suave
+            Color(0xFFE8F5E9), // Menta suave
+            Color(0xFFECEFF1), // Gris azulado suave
+            Color(0xFFFFF3E0), // Melocotón suave
+            Color(0xFFE0F7FA)  // Cian suave
+        )
+    }
+
+    // Mapa de colores dinámico por viaje (Stops con mismo destino comparten color)
+    val colorMap = remember(viaje.paradas) {
+        val uniqueDestinations = viaje.paradas.map { it.destino }.distinct()
+        uniqueDestinations.mapIndexed { index, destino ->
+            destino to pastelPalette[index % pastelPalette.size]
+        }.toMap()
+    }
+
     val defaultGradientStart = MaterialTheme.colorScheme.surfaceContainerLow
     val defaultGradientEnd = MaterialTheme.colorScheme.surfaceContainerHigh
 
     val parsedColorStart = parsearColorHexSeguro(viaje.colorHexA, defaultGradientStart)
     val parsedColorEnd = parsearColorHexSeguro(viaje.colorHexHx, defaultGradientEnd)
 
-    // Gradiente horizontal
     val gradientBrush = remember(viaje.colorHexA, viaje.colorHexHx) {
         androidx.compose.ui.graphics.Brush.horizontalGradient(
             colors = listOf(parsedColorStart, parsedColorEnd)
@@ -154,7 +198,18 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable { isExpanded = !isExpanded },
+            .clickable { isExpanded = !isExpanded }
+            .then(
+                if (isGuardado) {
+                    Modifier.border(
+                        width = 2.dp,
+                        color = Color(0xFFFFC107), // Borde dorado indicativo si está guardado
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -164,7 +219,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                 .padding(16.dp)
         ) {
             Column {
-                // Fila Principal: Vista Colapsada del Viaje
+                // Fila Principal: Vista Colapsada
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -184,7 +239,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                         )
                     )
 
-                    // Centro: Información consolidada del viaje
+                    // Centro: Detalles consolidados del viaje
                     Column(
                         modifier = Modifier.weight(1f)
                     ) {
@@ -210,6 +265,19 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // 👇 NUEVO: Estrella interactiva para agregar a "Guardados" en local
+                    IconButton(
+                        onClick = onGuardarToggle,
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Guardar viaje",
+                            tint = if (isGuardado) Color(0xFFFFC107) else Color.White.copy(alpha = 0.4f),
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
@@ -254,7 +322,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                     }
                 }
 
-                // Sección del Acordeón Desplegable (Carga de Paradas en Bloques Coloreados)
+                // Sección del Acordeón Desplegable (Carga limpia de bloques coloreados por cliente)
                 AnimatedVisibility(visible = isExpanded) {
                     Column(
                         modifier = Modifier
@@ -262,18 +330,17 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                             .padding(top = 12.dp)
                     ) {
                         viaje.paradas.forEachIndexed { index, parada ->
-                            var isRead by remember { mutableStateOf(false) }
+                            if (index > 0) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
 
-                            val basePastelColor = getProductPastelColor(parada.producto)
-                            val containerColor = if (isRead) basePastelColor.copy(alpha = 0.5f) else basePastelColor
+                            val containerColor = colorMap[parada.destino] ?: MaterialTheme.colorScheme.surfaceVariant
 
                             Surface(
                                 color = containerColor,
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                border = if (isRead) null else androidx.compose.foundation.BorderStroke(
+                                modifier = Modifier.fillMaxWidth(),
+                                border = androidx.compose.foundation.BorderStroke(
                                     width = 1.dp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 )
@@ -283,30 +350,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                                         .fillMaxWidth()
                                         .padding(12.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Checkbox(
-                                            checked = isRead,
-                                            onCheckedChange = { isRead = it },
-                                            colors = CheckboxDefaults.colors(
-                                                checkedColor = MaterialTheme.colorScheme.primary,
-                                                uncheckedColor = MaterialTheme.colorScheme.outline
-                                            )
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "Marcar como leído",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                            else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
+                                    // Destino Limpio con ícono de ubicación (Sin checkbox repetitivo)
                                     val destinoFiltrado = remember(parada.destino) {
                                         parada.destino.split(" - ").last().trim()
                                     }
@@ -318,22 +362,21 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                                         Icon(
                                             imageVector = Icons.Default.Place,
                                             contentDescription = "Ubicación",
-                                            tint = if (isRead) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                            else MaterialTheme.colorScheme.primary,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = destinoFiltrado,
                                             style = MaterialTheme.typography.titleMedium,
-                                            color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                            else MaterialTheme.colorScheme.onSurface,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
 
                                     Spacer(modifier = Modifier.height(12.dp))
 
+                                    // Estructura Proforma: Producto y Cantidad
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -360,8 +403,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                                                 text = parada.cantidad.ifEmpty { "-" },
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                                else MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         }
                                     }
@@ -379,8 +421,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                                                 text = parada.cisternado,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.Medium,
-                                                color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                                else MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         }
                                     }
@@ -416,20 +457,8 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
 
 
 // =================================================================================================
-// 👇 FUNCIONES AUXILIARES GLOBALES (Declaradas al nivel del archivo, fuera de ViajeCardExpandible)
+// 👇 FUNCIONES AUXILIARES GLOBALES
 // =================================================================================================
-
-@Composable
-fun getProductPastelColor(producto: String): Color {
-    val uppercaseProd = producto.uppercase()
-    return when {
-        uppercaseProd.contains("SUPER") -> Color(0xFFF1F8E9) // Verde Pastel
-        uppercaseProd.contains("INFINIA DIESEL") -> Color(0xFFFBE9E7) // Naranja/Rojo Pastel
-        uppercaseProd.contains("INFINIA") -> Color(0xFFE3F2FD) // Azul Pastel
-        uppercaseProd.contains("DIESEL") || uppercaseProd.contains("500") -> Color(0xFFECEFF1) // Gris Pastel
-        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    }
-}
 
 @Composable
 fun ProductBadge(producto: String) {
@@ -478,7 +507,6 @@ fun DatoExtraUI(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-// Analizador de color seguro que mitiga posibles caídas de parsing de UI
 private fun parsearColorHexSeguro(hex: String?, fallback: Color): Color {
     if (hex.isNullOrBlank()) return fallback
     return try {

@@ -23,11 +23,25 @@ class RuteoViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<UiState>(UiState.Loading)
     val uiState: StateFlow<UiState> = _uiState
 
+    // 👇 NUEVO: Estado de persistencia local en memoria para los IDs guardados
+    private val _viajesGuardados = MutableStateFlow<Set<String>>(emptySet())
+    val viajesGuardados: StateFlow<Set<String>> = _viajesGuardados
+
     private val masterIndexSheetId = "1ny9yOftgyYWfzJFpQ9h8l2T_owDlyMV_HdEgeQ5Gm8E"
     private var listaDias = listOf<DiaRuteo>()
 
     init {
         cargarIndiceDeDias()
+    }
+
+    // 👇 NUEVO: Función para agregar o quitar viajes del seguimiento local
+    fun toggleGuardarViaje(idUnico: String) {
+        val actual = _viajesGuardados.value
+        _viajesGuardados.value = if (actual.contains(idUnico)) {
+            actual - idUnico
+        } else {
+            actual + idUnico
+        }
     }
 
     private fun cargarIndiceDeDias() {
@@ -43,7 +57,7 @@ class RuteoViewModel : ViewModel() {
                         )
                     }.filter { it.sheetId.isNotEmpty() }
 
-                    // 👇 OPTIMIZACIÓN: Ordenamiento y limitación estricta de las 10 planillas más recientes
+                    // 👇 OPTIMIZACIÓN: Límite estricto de las 10 planillas más recientes
                     listaDias = todosLosDias
                         .sortedByDescending { it.fecha.toComparableDate() }
                         .take(10)
@@ -68,7 +82,6 @@ class RuteoViewModel : ViewModel() {
             try {
                 val todosLosViajes = mutableListOf<ViajeIntegrado>()
 
-                // 👇 LLAMAMOS DIRECTAMENTE AL MICROSERVICIO LIMPIO Y RÁPIDO
                 val deferredDias = dias.map { dia ->
                     async {
                         try {
@@ -84,7 +97,6 @@ class RuteoViewModel : ViewModel() {
                 resultados.forEach { todosLosViajes.addAll(it) }
 
                 val viajesOrdenados = todosLosViajes.sortedByDescending { it.fechaPlanificada.toComparableDate() }
-
                 _uiState.value = UiState.Success(listaDias, viajesOrdenados)
 
             } catch (e: Exception) {
@@ -94,15 +106,16 @@ class RuteoViewModel : ViewModel() {
     }
 
     private fun String.toComparableDate(): Long {
-        try {
+        return try {
             val parts = this.split("/")
             if (parts.size == 3) {
                 val d = parts[0].padStart(2, '0')
                 val m = parts[1].padStart(2, '0')
-                val y = parts[2]
-                return "$y$m$d".toLong()
-            }
-        } catch (e: Exception) {}
-        return 0L
+                val y = parts[2].substringBefore(" ").trim()
+                "$y$m$d".toLong()
+            } else 0L
+        } catch (e: Exception) {
+            0L
+        }
     }
 }
