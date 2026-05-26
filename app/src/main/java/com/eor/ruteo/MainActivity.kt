@@ -132,20 +132,18 @@ fun RuteoAppScreen(state: UiState) {
     }
 }
 
-
-
 @Composable
 fun ViajeCardExpandible(viaje: ViajeIntegrado) {
     var isExpanded by remember { mutableStateOf(false) }
-    // Estado local para seguimiento interno de UI sin persistencia remota (Lectura estricta)
-    var isTracked by remember { mutableStateOf(false) }
 
+    // Colores por defecto del tema para cuando no hay degradado definido en el Excel
     val defaultGradientStart = MaterialTheme.colorScheme.surfaceContainerLow
     val defaultGradientEnd = MaterialTheme.colorScheme.surfaceContainerHigh
 
     val parsedColorStart = parsearColorHexSeguro(viaje.colorHexA, defaultGradientStart)
     val parsedColorEnd = parsearColorHexSeguro(viaje.colorHexHx, defaultGradientEnd)
 
+    // Gradiente horizontal
     val gradientBrush = remember(viaje.colorHexA, viaje.colorHexHx) {
         androidx.compose.ui.graphics.Brush.horizontalGradient(
             colors = listOf(parsedColorStart, parsedColorEnd)
@@ -156,19 +154,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable { isExpanded = !isExpanded }
-            // Modificador reactivo local: añade un borde primario sutil al marcar para seguimiento
-            .then(
-                if (isTracked) {
-                    Modifier.border(
-                        width = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    Modifier
-                }
-            ),
+            .clickable { isExpanded = !isExpanded },
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -178,11 +164,12 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                 .padding(16.dp)
         ) {
             Column {
-                // Fila Principal: Vista Colapsada
+                // Fila Principal: Vista Colapsada del Viaje
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Lado izquierdo: N° Unidad Gigante
                     Text(
                         text = viaje.numeroUt.ifEmpty { "S/D" },
                         fontSize = 38.sp,
@@ -197,7 +184,10 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                         )
                     )
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Centro: Información consolidada del viaje
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Text(
                             text = viaje.chofer.ifEmpty { "Chofer S/D" },
                             style = MaterialTheme.typography.titleMedium,
@@ -226,7 +216,7 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Fila de Control
+                // Fila Inferior de Control
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.CenterStart
@@ -264,104 +254,136 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                     }
                 }
 
-                // ==========================================
-                // 👇 FASE DE INTERACTIVIDAD Y LIMPIEZA VISUAL (DROPDOWN)
-                // ==========================================
+                // Sección del Acordeón Desplegable (Carga de Paradas en Bloques Coloreados)
                 AnimatedVisibility(visible = isExpanded) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp)
                     ) {
-                        // 1. Selector interactivo local de seguimiento (Sin conexión hacia Sheets)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = isTracked,
-                                onCheckedChange = { isTracked = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.primary,
-                                    uncheckedColor = MaterialTheme.colorScheme.outline
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Marcar para seguimiento",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                        )
-
-                        // 2. Renderizado limpio y modular de paradas (Estilo Proforma)
                         viaje.paradas.forEachIndexed { index, parada ->
-                            if (index > 0) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-                                )
-                            }
+                            var isRead by remember { mutableStateOf(false) }
 
-                            // Limpieza dinámica de destinos en el cliente (Ej: remueve prefijos numéricos)
-                            val destinoFiltrado = remember(parada.destino) {
-                                parada.destino.split(" - ").last().trim()
-                            }
+                            val basePastelColor = getProductPastelColor(parada.producto)
+                            val containerColor = if (isRead) basePastelColor.copy(alpha = 0.5f) else basePastelColor
 
-                            Row(
+                            Surface(
+                                color = containerColor,
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = "Destino",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                border = if (isRead) null else androidx.compose.foundation.BorderStroke(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = destinoFiltrado,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 28.dp), // Alineado estético bajo el icono
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1.2f)) {
-                                    Text(
-                                        text = "PRODUCTO",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    ProductBadge(producto = parada.producto)
-                                }
-                                DatoExtraUI("CANTIDAD", parada.cantidad, Modifier.weight(0.6f))
-                            }
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = isRead,
+                                            onCheckedChange = { isRead = it },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = MaterialTheme.colorScheme.primary,
+                                                uncheckedColor = MaterialTheme.colorScheme.outline
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Marcar como leído",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
 
-                            if (parada.cisternado.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Box(modifier = Modifier.padding(start = 28.dp)) {
-                                    DatoExtraUI("CISTERNADO SUGERIDO", parada.cisternado, Modifier.fillMaxWidth())
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    val destinoFiltrado = remember(parada.destino) {
+                                        parada.destino.split(" - ").last().trim()
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Place,
+                                            contentDescription = "Ubicación",
+                                            tint = if (isRead) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            else MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = destinoFiltrado,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            else MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Column(modifier = Modifier.weight(1.2f)) {
+                                            Text(
+                                                text = "PRODUCTO",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            ProductBadge(producto = parada.producto)
+                                        }
+
+                                        Column(modifier = Modifier.weight(0.8f)) {
+                                            Text(
+                                                text = "CANTIDAD",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = parada.cantidad.ifEmpty { "-" },
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                                else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+
+                                    if (parada.cisternado.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Column(modifier = Modifier.fillMaxWidth()) {
+                                            Text(
+                                                text = "CISTERNADO SUGERIDO",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = parada.cisternado,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                                else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -386,33 +408,45 @@ fun ViajeCardExpandible(viaje: ViajeIntegrado) {
                             )
                         }
                     }
-                }
-            }
-        }
+                } // <--- FIN AnimatedVisibility
+            } // <--- FIN Column
+        } // <--- FIN Box
+    } // <--- FIN Card
+} // <--- FIN ViajeCardExpandible
+
+
+// =================================================================================================
+// 👇 FUNCIONES AUXILIARES GLOBALES (Declaradas al nivel del archivo, fuera de ViajeCardExpandible)
+// =================================================================================================
+
+@Composable
+fun getProductPastelColor(producto: String): Color {
+    val uppercaseProd = producto.uppercase()
+    return when {
+        uppercaseProd.contains("SUPER") -> Color(0xFFF1F8E9) // Verde Pastel
+        uppercaseProd.contains("INFINIA DIESEL") -> Color(0xFFFBE9E7) // Naranja/Rojo Pastel
+        uppercaseProd.contains("INFINIA") -> Color(0xFFE3F2FD) // Azul Pastel
+        uppercaseProd.contains("DIESEL") || uppercaseProd.contains("500") -> Color(0xFFECEFF1) // Gris Pastel
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     }
 }
 
-// ==========================================
-// 👇 MODIFICACIÓN DE LA FUNCIÓN AUXILIAR PRODUCTBADGE
-// ==========================================
 @Composable
 fun ProductBadge(producto: String) {
-    // Corrección para evitar el error de compilación por función obsoleta
     val uppercaseProd = producto.uppercase()
 
-    // Configuración de paleta cromática de alta legibilidad basada en el tipo de producto
     val (backColor, textColor) = when {
         uppercaseProd.contains("SUPER") -> {
-            Color(0xFFE8F5E9) to Color(0xFF2E7D32) // Verde para Super
+            Color(0xFFDCEDC8) to Color(0xFF2E7D32)
         }
         uppercaseProd.contains("INFINIA DIESEL") -> {
-            Color(0xFFFFF3E0) to Color(0xFFE65100) // Naranja para Infinia Diesel
+            Color(0xFFFFCCBC) to Color(0xFFD84315)
         }
         uppercaseProd.contains("INFINIA") -> {
-            Color(0xFFE3F2FD) to Color(0xFF1565C0) // Azul para Infinia
+            Color(0xFFBBDEFB) to Color(0xFF1565C0)
         }
         uppercaseProd.contains("DIESEL") || uppercaseProd.contains("500") -> {
-            Color(0xFFECEFF1) to Color(0xFF37474F) // Gris para Diesel 500
+            Color(0xFFCFD8DC) to Color(0xFF37474F)
         }
         else -> {
             MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
@@ -444,7 +478,7 @@ fun DatoExtraUI(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-// Parser de color estricto y a prueba de fallos para evitar roturas ante colores inválidos
+// Analizador de color seguro que mitiga posibles caídas de parsing de UI
 private fun parsearColorHexSeguro(hex: String?, fallback: Color): Color {
     if (hex.isNullOrBlank()) return fallback
     return try {

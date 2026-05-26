@@ -36,9 +36,17 @@ class RuteoViewModel : ViewModel() {
             try {
                 val response = NetworkClient.api.getSheetData(masterIndexSheetId, "Indice")
                 if (response.success) {
-                    listaDias = response.data.map { fila ->
-                        DiaRuteo(fecha = fila.getOrElse(0) { "Sin fecha" }, sheetId = fila.getOrElse(1) { "" })
+                    val todosLosDias = response.data.map { fila ->
+                        DiaRuteo(
+                            fecha = fila.getOrElse(0) { "Sin fecha" },
+                            sheetId = fila.getOrElse(1) { "" }
+                        )
                     }.filter { it.sheetId.isNotEmpty() }
+
+                    // 👇 OPTIMIZACIÓN: Ordenamiento y limitación estricta de las 10 planillas más recientes
+                    listaDias = todosLosDias
+                        .sortedByDescending { it.fecha.toComparableDate() }
+                        .take(10)
 
                     if (listaDias.isNotEmpty()) {
                         cargarTodosLosDias(listaDias)
