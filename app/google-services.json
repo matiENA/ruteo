@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1072720072273",
+    "project_id": "ruteoute",
+    "storage_bucket": "ruteoute.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1072720072273:android:efc92ae7bd3af4b4817270",
+        "android_client_info": {
+          "package_name": "com.eor.ruteo.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDKI307-Pn4_dnPjP1Mo1NpAD5R35-lZ3E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
