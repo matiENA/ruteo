@@ -66,4 +66,7 @@ dependencies {
 
     // (Opcional) El interceptor por si quieres ver los datos en la consola
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Preferences DataStore para persistencia asíncrona de clave-valor
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 }

@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
@@ -48,101 +50,161 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
+    // Control de navegación local: activa o desactiva la visualización de Historial
+    var showHistorial by remember { mutableStateOf(false) }
+
     when (state) {
         is UiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         is UiState.Error -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error) }
         is UiState.Success -> {
             Column(modifier = Modifier.fillMaxSize()) {
 
+// TopAppBar adaptativo a la navegación del Historial
                 TopAppBar(
-                    title = { Text("RUTEO OPERATIVO", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) },
+                    title = {
+                        Text(
+                            text = if (showHistorial) "HISTORIAL DE VIAJES" else "RUTEO OPERATIVO",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        if (showHistorial) {
+                            IconButton(onClick = { showHistorial = false }) {
+                                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Volver")
+                            }
+                        }
+                    },
+                    actions = {
+                        if (!showHistorial) {
+                            // 👇 CORRECCIÓN: Usamos el ícono List para ver el historial operativo
+                            IconButton(onClick = { showHistorial = true }) {
+                                Icon(imageVector = Icons.Default.List, contentDescription = "Historial")
+                            }
+                        }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 )
 
-                // 👇 NUEVO: Pestaña "⭐ Guardados" integrada como primera opción de ruteo
-                val terminalesFijas = listOf("⭐ Guardados", "Plaza Huincul", "Dock Sud", "Sin Terminal")
-                var selectedTabIndex by remember { mutableIntStateOf(0) }
-
-                val tareasPendientes = state.dataRuteo.filter { !it.isCompletado }
                 val viajesGuardados by viewModel.viajesGuardados.collectAsState()
 
-                ScrollableTabRow(selectedTabIndex = selectedTabIndex, edgePadding = 16.dp) {
-                    terminalesFijas.forEachIndexed { index, terminal ->
-                        // Cálculo del indicador numérico dinámico por pestaña
-                        val count = if (terminal == "⭐ Guardados") {
-                            tareasPendientes.count { it.idUnico in viajesGuardados }
-                        } else {
-                            tareasPendientes.count { it.terminalOrigen == terminal }
+                if (showHistorial) {
+                    // ==========================================
+                    // 👇 VISTA SECUNDARIA: HISTORIAL DE VIAJES (isCompletado == true)
+                    // ==========================================
+                    if (state.viajesFinalizados.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No se registran viajes finalizados", color = MaterialTheme.colorScheme.outline)
                         }
-
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(text = terminal, fontWeight = FontWeight.Bold)
-                                    if (count > 0) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
-                                            Text(
-                                                text = count.toString(),
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                fontSize = 10.sp,
-                                                modifier = Modifier.padding(horizontal = 4.dp)
-                                            )
-                                        }
+                    } else {
+                        val dataAgrupada = state.viajesFinalizados.groupBy { it.fechaPlanificada }
+                        LazyColumn(modifier = Modifier.fillMaxSize().weight(1f)) {
+                            dataAgrupada.forEach { (fechaPlan, tareas) ->
+                                stickyHeader {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "📅 Entregado: $fechaPlan",
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
-                            }
-                        )
-                    }
-                }
-
-                val terminalSeleccionada = terminalesFijas[selectedTabIndex]
-
-                // 👇 Filtrado inteligente reactivo a la pestaña activa
-                val viajesDeEstaTerminal = if (terminalSeleccionada == "⭐ Guardados") {
-                    tareasPendientes.filter { it.idUnico in viajesGuardados }
-                } else {
-                    tareasPendientes.filter { it.terminalOrigen == terminalSeleccionada }
-                }
-
-                if (viajesDeEstaTerminal.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
-                        val mensajeVacio = if (terminalSeleccionada == "⭐ Guardados") {
-                            "No has guardado ningún viaje para seguimiento local"
-                        } else {
-                            "No hay viajes para $terminalSeleccionada"
-                        }
-                        Text(mensajeVacio, color = MaterialTheme.colorScheme.outline)
-                    }
-                } else {
-                    val dataAgrupada = viajesDeEstaTerminal.groupBy { it.fechaPlanificada }
-
-                    LazyColumn(modifier = Modifier.fillMaxSize().weight(1f)) {
-                        dataAgrupada.forEach { (fechaPlan, tareas) ->
-                            stickyHeader {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = "📅 Planificado: $fechaPlan",
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
+                                items(tareas, key = { it.idUnico }) { tarea ->
+                                    val isGuardado = tarea.idUnico in viajesGuardados
+                                    ViajeCardExpandible(
+                                        viaje = tarea,
+                                        isGuardado = isGuardado,
+                                        onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
                                     )
                                 }
                             }
+                        }
+                    }
+                } else {
+                    // ==========================================
+                    // 👇 PANTALLA PRINCIPAL: VIAJES ACTIVOS (isCompletado == false)
+                    // ==========================================
+                    val terminalesFijas = listOf("⭐ Guardados", "Plaza Huincul", "Dock Sud", "Sin Terminal")
+                    var selectedTabIndex by remember { mutableIntStateOf(0) }
 
-                            items(tareas, key = { it.idUnico }) { tarea ->
-                                val isGuardado = tarea.idUnico in viajesGuardados
-                                ViajeCardExpandible(
-                                    viaje = tarea,
-                                    isGuardado = isGuardado,
-                                    onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
-                                )
+                    ScrollableTabRow(selectedTabIndex = selectedTabIndex, edgePadding = 16.dp) {
+                        terminalesFijas.forEachIndexed { index, terminal ->
+                            val count = if (terminal == "⭐ Guardados") {
+                                state.viajesActivos.count { it.idUnico in viajesGuardados }
+                            } else {
+                                state.viajesActivos.count { it.terminalOrigen == terminal }
+                            }
+
+                            Tab(
+                                selected = selectedTabIndex == index,
+                                onClick = { selectedTabIndex = index },
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(text = terminal, fontWeight = FontWeight.Bold)
+                                        if (count > 0) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                                                Text(
+                                                    text = count.toString(),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    fontSize = 10.sp,
+                                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    val terminalSeleccionada = terminalesFijas[selectedTabIndex]
+                    val viajesFiltrados = if (terminalSeleccionada == "⭐ Guardados") {
+                        state.viajesActivos.filter { it.idUnico in viajesGuardados }
+                    } else {
+                        state.viajesActivos.filter { it.terminalOrigen == terminalSeleccionada }
+                    }
+
+                    if (viajesFiltrados.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                            val mensaje = if (terminalSeleccionada == "⭐ Guardados") {
+                                "No posees viajes en seguimiento local"
+                            } else {
+                                "No hay viajes activos para $terminalSeleccionada"
+                            }
+                            Text(mensaje, color = MaterialTheme.colorScheme.outline)
+                        }
+                    } else {
+                        val dataAgrupada = viajesFiltrados.groupBy { it.fechaPlanificada }
+                        LazyColumn(modifier = Modifier.fillMaxSize().weight(1f)) {
+                            dataAgrupada.forEach { (fechaPlan, tareas) ->
+                                stickyHeader {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "📅 Planificado: $fechaPlan",
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                items(tareas, key = { it.idUnico }) { tarea ->
+                                    val isGuardado = tarea.idUnico in viajesGuardados
+                                    ViajeCardExpandible(
+                                        viaje = tarea,
+                                        isGuardado = isGuardado,
+                                        onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -160,7 +222,7 @@ fun ViajeCardExpandible(
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
-    // Paleta de colores pastel inmutable para los bloques de clientes
+    // Paleta inmutable de colores pastel para separar clientes en el interior del dropdown
     val pastelPalette = remember {
         listOf(
             Color(0xFFF1F8E9), // Verde suave
@@ -174,7 +236,7 @@ fun ViajeCardExpandible(
         )
     }
 
-    // Mapa de colores dinámico por viaje (Stops con mismo destino comparten color)
+    // Mapa de asignación cromática dinámica por Destino (Si se repite el destino, se repite el color)
     val colorMap = remember(viaje.paradas) {
         val uniqueDestinations = viaje.paradas.map { it.destino }.distinct()
         uniqueDestinations.mapIndexed { index, destino ->
@@ -240,9 +302,7 @@ fun ViajeCardExpandible(
                     )
 
                     // Centro: Detalles consolidados del viaje
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = viaje.chofer.ifEmpty { "Chofer S/D" },
                             style = MaterialTheme.typography.titleMedium,
@@ -268,7 +328,7 @@ fun ViajeCardExpandible(
                         )
                     }
 
-                    // 👇 NUEVO: Estrella interactiva para agregar a "Guardados" en local
+                    // Estrella de seguimiento local en la cabecera
                     IconButton(
                         onClick = onGuardarToggle,
                         modifier = Modifier.padding(start = 8.dp)
@@ -334,6 +394,7 @@ fun ViajeCardExpandible(
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
 
+                            // Selección dinámica del color pastel asignado a este destino/cliente
                             val containerColor = colorMap[parada.destino] ?: MaterialTheme.colorScheme.surfaceVariant
 
                             Surface(
@@ -350,7 +411,7 @@ fun ViajeCardExpandible(
                                         .fillMaxWidth()
                                         .padding(12.dp)
                                 ) {
-                                    // Destino Limpio con ícono de ubicación (Sin checkbox repetitivo)
+                                    // Destino Limpio con ícono de ubicación (Sin prefijos numéricos YPF ni checkbox repetitivo)
                                     val destinoFiltrado = remember(parada.destino) {
                                         parada.destino.split(" - ").last().trim()
                                     }
