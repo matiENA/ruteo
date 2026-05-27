@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.SolidColor // Importación del pincel de relleno sólido [txt]
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
@@ -349,7 +350,7 @@ fun ViajeCardExpandible(
                             Icon(
                                 imageVector = Icons.Default.Star,
                                 contentDescription = "Guardar viaje",
-                                tint = if (isGuardado) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurface,
+                                tint = if (isGuardado) Color(0xFFFFD700) else Color(0xFFD3D3D3), // Tono gris claro d3d3d3 sólido [txt]
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -406,7 +407,7 @@ fun ViajeCardExpandible(
                             Icon(
                                 imageVector = if (isGuardado) Icons.Default.Star else StarBorderIcon,
                                 contentDescription = "Guardar viaje",
-                                tint = if (isGuardado) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurface,
+                                tint = if (isGuardado) Color(0xFFFFD700) else Color(0xFFD3D3D3), // Tono gris claro d3d3d3 sólido [txt]
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -666,7 +667,7 @@ private fun parsearColorHexSeguro(hex: String?, fallback: Color): Color {
     }
 }
 
-// 👇 VECTOR DE SOPORTE: Declaración privada para evitar colisiones de classpath o ambigüedad de imports [txt]
+// 👇 VECTOR DE SOPORTE: Corregido con SolidColor para evitar que el icono desaparezca en inactivo [txt]
 private val StarBorderIcon: ImageVector
     get() {
         val existing = _starBorderIcon
@@ -678,7 +679,8 @@ private val StarBorderIcon: ImageVector
             viewportWidth = 24f,
             viewportHeight = 24f
         ).path(
-            pathFillType = PathFillType.EvenOdd // Mapeado correcto de tipo de empaque [txt]
+            fill = SolidColor(Color.Black), // 👈 SOLUCIÓN CLAVE: Añadimos un relleno para pintar los píxeles [txt]
+            pathFillType = PathFillType.EvenOdd
         ) {
             moveTo(22f, 9.24f)
             lineTo(14.81f, 8.62f)

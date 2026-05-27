@@ -109,10 +109,11 @@ fun ViajeHistorialCard(
                 Icon(
                     imageVector = if (isGuardado) Icons.Default.Star else StarBorderIcon,
                     contentDescription = "Guardar viaje",
+                    // 👇 ACTUALIZADO: Tono gris claro d3d3d3 sólido cuando está vacío [txt]
                     tint = if (isGuardado) {
                         Color(0xFFFFD700)
                     } else {
-                        MaterialTheme.colorScheme.onSurface // Sólido de alto contraste [txt]
+                        Color(0xFFD3D3D3)
                     },
                     modifier = Modifier.size(24.dp)
                 )
