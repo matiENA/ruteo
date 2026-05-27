@@ -6,10 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.eor.ruteo.data.DiaReciente
 import com.eor.ruteo.data.NetworkClient
 import com.eor.ruteo.data.ViajeIntegrado
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 sealed class UiState {
@@ -40,7 +42,8 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
     private var listaDias = listOf<DiaReciente>()
 
     init {
-        cargarTodoDesdeBff()
+        // 👇 NUEVO: Iniciamos la sincronización en vivo mediante un demonio de polling silencioso
+        iniciarSincronizacionEnVivo()
     }
 
     fun toggleGuardarViaje(idUnico: String) {
@@ -48,30 +51,41 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 repository.toggleViajeGuardado(idUnico)
             } catch (e: Exception) {
-                // Manejo de errores de almacenamiento local silencioso
+                // Silenciado defensivo de persistencia local
             }
         }
     }
 
-    private fun cargarTodoDesdeBff() {
+    // 👇 NUEVO: Bucle asíncrono robusto para sincronización continua sin congelamientos de UI
+    private fun iniciarSincronizacionEnVivo() {
         viewModelScope.launch {
-            _uiState.value = UiState.Loading
-            try {
-                val response = NetworkClient.api.getViajesRecientes(masterIndexSheetId)
-                if (response.success) {
-                    listaDias = response.diasDisponibles
-                    val todosLosViajes = response.data
+            while (isActive) {
+                try {
+                    val response = NetworkClient.api.getViajesRecientes(masterIndexSheetId)
+                    if (response.success) {
+                        listaDias = response.diasDisponibles
+                        val todosLosViajes = response.data
 
-                    // 👇 REGLA DE NEGOCIO: Separar los viajes globales en Activos e Historial
-                    val activos = todosLosViajes.filter { !it.isCompletado }
-                    val finalizados = todosLosViajes.filter { it.isCompletado }
+                        val activos = todosLosViajes.filter { !it.isCompletado }
+                        val finalizados = todosLosViajes.filter { it.isCompletado }
 
-                    _uiState.value = UiState.Success(response.diasDisponibles, activos, finalizados)
-                } else {
-                    _uiState.value = UiState.Error("No se pudieron consolidar los datos de ruteo.")
+                        // Actualización de estado fluida
+                        _uiState.value = UiState.Success(response.diasDisponibles, activos, finalizados)
+                    } else {
+                        // En caso de falla, si ya tenemos datos previos en caché, evitamos pisarlos con estados de error
+                        if (_uiState.value is UiState.Loading) {
+                            _uiState.value = UiState.Error("No se pudieron consolidar los datos de ruteo.")
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Micro-cortes de red son silenciados para preservar la caché activa en pantalla
+                    if (_uiState.value is UiState.Loading) {
+                        _uiState.value = UiState.Error("Error de comunicación: ${e.message}")
+                    }
                 }
-            } catch (e: Exception) {
-                _uiState.value = UiState.Error("Error de comunicación: ${e.message}")
+
+                // delay de 30 segundos entre ciclos de sincronización
+                delay(30000)
             }
         }
     }

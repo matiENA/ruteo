@@ -14,8 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
@@ -25,6 +25,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,7 +53,6 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
-    // Control de navegación local: activa o desactiva la visualización de Historial
     var showHistorial by remember { mutableStateOf(false) }
 
     when (state) {
@@ -59,7 +61,7 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
         is UiState.Success -> {
             Column(modifier = Modifier.fillMaxSize()) {
 
-// TopAppBar adaptativo a la navegación del Historial
+                // TopAppBar adaptativo a la navegación del Historial (AutoMirrored)
                 TopAppBar(
                     title = {
                         Text(
@@ -71,15 +73,14 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
                     navigationIcon = {
                         if (showHistorial) {
                             IconButton(onClick = { showHistorial = false }) {
-                                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Volver")
+                                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                             }
                         }
                     },
                     actions = {
                         if (!showHistorial) {
-                            // 👇 CORRECCIÓN: Usamos el ícono List para ver el historial operativo
                             IconButton(onClick = { showHistorial = true }) {
-                                Icon(imageVector = Icons.Default.List, contentDescription = "Historial")
+                                Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Historial")
                             }
                         }
                     },
@@ -116,11 +117,13 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
                                 }
                                 items(tareas, key = { it.idUnico }) { tarea ->
                                     val isGuardado = tarea.idUnico in viajesGuardados
-                                    ViajeCardExpandible(
-                                        viaje = tarea,
-                                        isGuardado = isGuardado,
-                                        onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
-                                    )
+                                    Box(modifier = Modifier.animateItemPlacement()) {
+                                        ViajeHistorialCard(
+                                            viaje = tarea,
+                                            isGuardado = isGuardado,
+                                            onToggleGuardar = { viewModel.toggleGuardarViaje(tarea.idUnico) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -199,11 +202,13 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
                                 }
                                 items(tareas, key = { it.idUnico }) { tarea ->
                                     val isGuardado = tarea.idUnico in viajesGuardados
-                                    ViajeCardExpandible(
-                                        viaje = tarea,
-                                        isGuardado = isGuardado,
-                                        onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
-                                    )
+                                    Box(modifier = Modifier.animateItemPlacement()) {
+                                        ViajeCardExpandible(
+                                            viaje = tarea,
+                                            isGuardado = isGuardado,
+                                            onGuardarToggle = { viewModel.toggleGuardarViaje(tarea.idUnico) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -222,7 +227,21 @@ fun ViajeCardExpandible(
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
-    // Paleta inmutable de colores pastel para separar clientes en el interior del dropdown
+    // Repositorio defensivo de tipos de plataforma nulos en tiempo de ejecución [txt]
+    val numeroUt = remember(viaje.numeroUt) { (viaje.numeroUt as? String?).orEmpty() }
+    val chofer = remember(viaje.chofer) { (viaje.chofer as? String?).orEmpty() }
+    val tractor = remember(viaje.tractor) { (viaje.tractor as? String?).orEmpty() }
+    val semi = remember(viaje.semi) { (viaje.semi as? String?).orEmpty() }
+    val nViaje = remember(viaje.nViaje) { (viaje.nViaje as? String?).orEmpty() }
+    val llegadaPlanta = remember(viaje.llegadaPlanta) { (viaje.llegadaPlanta as? String?).orEmpty() }
+    val numDespacho = remember(viaje.numDespacho) { (viaje.numDespacho as? String?).orEmpty() }
+    val ultimoTracking = remember(viaje.ultimoTracking) { (viaje.ultimoTracking as? String?).orEmpty() }
+    val horarioVacio = remember(viaje.horarioVacio) { (viaje.horarioVacio as? String?).orEmpty() }
+    val cisternadoReal = remember(viaje.cisternadoReal) { (viaje.cisternadoReal as? String?).orEmpty() }
+    val colorHexA = remember(viaje.colorHexA) { viaje.colorHexA as? String? }
+    val colorHexHx = remember(viaje.colorHexHx) { viaje.colorHexHx as? String? }
+    val isCompletado = remember(viaje.isCompletado) { (viaje.isCompletado as? Boolean) ?: false }
+
     val pastelPalette = remember {
         listOf(
             Color(0xFFF1F8E9), // Verde suave
@@ -236,9 +255,8 @@ fun ViajeCardExpandible(
         )
     }
 
-    // Mapa de asignación cromática dinámica por Destino (Si se repite el destino, se repite el color)
     val colorMap = remember(viaje.paradas) {
-        val uniqueDestinations = viaje.paradas.map { it.destino }.distinct()
+        val uniqueDestinations = viaje.paradas.map { (it.destino as? String?).orEmpty() }.distinct()
         uniqueDestinations.mapIndexed { index, destino ->
             destino to pastelPalette[index % pastelPalette.size]
         }.toMap()
@@ -247,10 +265,10 @@ fun ViajeCardExpandible(
     val defaultGradientStart = MaterialTheme.colorScheme.surfaceContainerLow
     val defaultGradientEnd = MaterialTheme.colorScheme.surfaceContainerHigh
 
-    val parsedColorStart = parsearColorHexSeguro(viaje.colorHexA, defaultGradientStart)
-    val parsedColorEnd = parsearColorHexSeguro(viaje.colorHexHx, defaultGradientEnd)
+    val parsedColorStart = parsearColorHexSeguro(colorHexA, defaultGradientStart)
+    val parsedColorEnd = parsearColorHexSeguro(colorHexHx, defaultGradientEnd)
 
-    val gradientBrush = remember(viaje.colorHexA, viaje.colorHexHx) {
+    val gradientBrush = remember(colorHexA, colorHexHx) {
         androidx.compose.ui.graphics.Brush.horizontalGradient(
             colors = listOf(parsedColorStart, parsedColorEnd)
         )
@@ -265,7 +283,7 @@ fun ViajeCardExpandible(
                 if (isGuardado) {
                     Modifier.border(
                         width = 2.dp,
-                        color = Color(0xFFFFC107), // Borde dorado indicativo si está guardado
+                        color = Color(0xFFFFC107),
                         shape = RoundedCornerShape(12.dp)
                     )
                 } else {
@@ -281,64 +299,117 @@ fun ViajeCardExpandible(
                 .padding(16.dp)
         ) {
             Column {
-                // Fila Principal: Vista Colapsada
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Lado izquierdo: N° Unidad Gigante
-                    Text(
-                        text = viaje.numeroUt.ifEmpty { "S/D" },
-                        fontSize = 38.sp,
-                        fontWeight = FontWeight.Black,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .padding(end = 16.dp)
-                            .widthIn(min = 65.dp),
-                        style = androidx.compose.ui.text.TextStyle(
-                            lineHeight = 40.sp,
-                            letterSpacing = (-1).sp
-                        )
-                    )
-
-                    // Centro: Detalles consolidados del viaje
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = viaje.chofer.ifEmpty { "Chofer S/D" },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "${viaje.tractor.ifEmpty { "S/D" }} | ${viaje.semi.ifEmpty { "S/D" }}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "TD: ${viaje.numDespacho.ifEmpty { "S/N" }}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    // Estrella de seguimiento local en la cabecera
-                    IconButton(
-                        onClick = onGuardarToggle,
-                        modifier = Modifier.padding(start = 8.dp)
+                // 👇 PRINCIPCIO DE GESTALT: Rediseño colapsado basado en la Ley de Prägnanz y Cierre [txt]
+                if (isCompletado) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Guardar viaje",
-                            tint = if (isGuardado) Color(0xFFFFC107) else Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(28.dp)
+                        // N° Unidad Gigante (Anclaje de Identificación)
+                        Text(
+                            text = numeroUt.ifEmpty { "S/D" },
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .widthIn(min = 65.dp),
+                            style = androidx.compose.ui.text.TextStyle(
+                                lineHeight = 40.sp,
+                                letterSpacing = (-1).sp
+                            )
                         )
+
+                        // Mensaje unificado de Cierre: Oculta datos irrelevantes [txt]
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = chofer.ifEmpty { "Chofer S/D" },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "FINALIZADO: $horarioVacio",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        IconButton(onClick = onGuardarToggle) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Guardar viaje",
+                                tint = if (isGuardado) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // N° Unidad Gigante
+                        Text(
+                            text = numeroUt.ifEmpty { "S/D" },
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .padding(end = 16.dp)
+                                .widthIn(min = 65.dp),
+                            style = androidx.compose.ui.text.TextStyle(
+                                lineHeight = 40.sp,
+                                letterSpacing = (-1).sp
+                            )
+                        )
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = chofer.ifEmpty { "Chofer S/D" },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${tractor.ifEmpty { "S/D" }} | ${semi.ifEmpty { "S/D" }}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+
+                            Spacer(modifier = Modifier.height(2.dp))
+                            // Fila secundaria discreta para viaje activo
+                            Text(
+                                text = "Viaje: ${nViaje.ifEmpty { "S/D" }} | Llegada: ${llegadaPlanta.ifEmpty { "S/D" }}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        IconButton(onClick = onGuardarToggle) {
+                            Icon(
+                                imageVector = if (isGuardado) Icons.Default.Star else StarBorderIcon,
+                                contentDescription = "Guardar viaje",
+                                tint = if (isGuardado) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
 
@@ -361,7 +432,7 @@ fun ViajeCardExpandible(
                         )
                     }
 
-                    if (viaje.ultimoTracking.isNotEmpty()) {
+                    if (ultimoTracking.isNotEmpty() && !isCompletado) {
                         Box(
                             modifier = Modifier.fillMaxWidth(),
                             contentAlignment = Alignment.CenterEnd
@@ -371,7 +442,7 @@ fun ViajeCardExpandible(
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
-                                    text = viaje.ultimoTracking,
+                                    text = ultimoTracking,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
@@ -382,7 +453,7 @@ fun ViajeCardExpandible(
                     }
                 }
 
-                // Sección del Acordeón Desplegable (Carga limpia de bloques coloreados por cliente)
+                // Sección del Acordeón Desplegable (Carga limpia de bloques por cliente)
                 AnimatedVisibility(visible = isExpanded) {
                     Column(
                         modifier = Modifier
@@ -394,8 +465,14 @@ fun ViajeCardExpandible(
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
 
-                            // Selección dinámica del color pastel asignado a este destino/cliente
-                            val containerColor = colorMap[parada.destino] ?: MaterialTheme.colorScheme.surfaceVariant
+                            // Sanitización preventiva del modelo ParadaViaje
+                            val destino = (parada.destino as? String?).orEmpty()
+                            val producto = (parada.producto as? String?).orEmpty()
+                            val cantidad = (parada.cantidad as? String?).orEmpty()
+                            val cisternado = (parada.cisternado as? String?).orEmpty()
+                            val direccion = (parada.direccion as? String?).orEmpty()
+
+                            val containerColor = colorMap[destino] ?: MaterialTheme.colorScheme.surfaceVariant
 
                             Surface(
                                 color = containerColor,
@@ -406,91 +483,100 @@ fun ViajeCardExpandible(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 )
                             ) {
-                                Column(
+                                // 👇 GESTALT: Organización simétrica en dos columnas principales [txt]
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(12.dp)
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
                                 ) {
-                                    // Destino Limpio con ícono de ubicación (Sin prefijos numéricos YPF ni checkbox repetitivo)
-                                    val destinoFiltrado = remember(parada.destino) {
-                                        parada.destino.split(" - ").last().trim()
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    // Columna Izquierda: Compartimento Cisternado Gigante (Anclaje visual como FIGURA) [txt]
+                                    Column(
+                                        modifier = Modifier
+                                            .width(70.dp)
+                                            .padding(end = 8.dp),
+                                        horizontalAlignment = Alignment.Start
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Place,
-                                            contentDescription = "Ubicación",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = destinoFiltrado,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontWeight = FontWeight.Bold
+                                            text = cisternado.ifEmpty { "-" },
+                                            fontSize = 32.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            style = androidx.compose.ui.text.TextStyle(
+                                                lineHeight = 34.sp
+                                            )
                                         )
                                     }
 
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    // Estructura Proforma: Producto y Cantidad
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.Top
+                                    // Columna Derecha: Información consolidada del cliente (Ley de Proximidad) [txt]
+                                    Column(
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Column(modifier = Modifier.weight(1.2f)) {
-                                            Text(
-                                                text = "PRODUCTO",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            ProductBadge(producto = parada.producto)
+                                        val destinoFiltrado = remember(destino) {
+                                            destino.split(" - ").last().trim()
                                         }
 
-                                        Column(modifier = Modifier.weight(0.8f)) {
-                                            Text(
-                                                text = "CANTIDAD",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Place,
+                                                contentDescription = "Ubicación",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
                                             )
-                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
                                             Text(
-                                                text = parada.cantidad.ifEmpty { "-" },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                text = destinoFiltrado,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
-                                    }
 
-                                    if (parada.cisternado.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Column(modifier = Modifier.fillMaxWidth()) {
-                                            Text(
-                                                text = "CISTERNADO SUGERIDO",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                            )
+                                        // Dirección física limpia debajo del cliente [txt]
+                                        if (direccion.isNotEmpty()) {
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
-                                                text = parada.cisternado,
+                                                text = "Dir.: $direccion",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Medium,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.60f),
+                                                fontWeight = FontWeight.Medium
                                             )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        // Fila de Producto y Cantidad
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            ProductBadge(producto = producto)
+
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = "CANT: ",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.50f)
+                                                )
+                                                Text(
+                                                    text = cantidad.ifEmpty { "-" },
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
 
-                        if (viaje.cisternadoReal.isNotEmpty()) {
+                        if (cisternadoReal.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(12.dp))
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.primary,
@@ -498,12 +584,12 @@ fun ViajeCardExpandible(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "🚚 CISTERNADO REAL (Total Unidad)",
+                                text = "🚚 CISTERNADO",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                             )
                             Text(
-                                text = viaje.cisternadoReal,
+                                text = cisternadoReal,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -522,8 +608,9 @@ fun ViajeCardExpandible(
 // =================================================================================================
 
 @Composable
-fun ProductBadge(producto: String) {
-    val uppercaseProd = producto.uppercase()
+fun ProductBadge(producto: String?) {
+    val safeProducto = (producto as? String?).orEmpty()
+    val uppercaseProd = safeProducto.uppercase()
 
     val (backColor, textColor) = when {
         uppercaseProd.contains("SUPER") -> {
@@ -550,7 +637,7 @@ fun ProductBadge(producto: String) {
         modifier = Modifier.padding(vertical = 2.dp)
     ) {
         Text(
-            text = producto,
+            text = safeProducto,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = textColor,
@@ -561,18 +648,66 @@ fun ProductBadge(producto: String) {
 
 @Composable
 fun DatoExtraUI(label: String, value: String, modifier: Modifier = Modifier) {
+    val safeValue = (value as? String?).orEmpty()
     Column(modifier = modifier.padding(end = 8.dp)) {
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(text = value.ifEmpty { "-" }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+        Text(text = safeValue.ifEmpty { "-" }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }
 
 private fun parsearColorHexSeguro(hex: String?, fallback: Color): Color {
-    if (hex.isNullOrBlank()) return fallback
+    val safeHex = hex as? String?
+    if (safeHex.isNullOrBlank()) return fallback
     return try {
-        Color(android.graphics.Color.parseColor(hex))
+        Color(android.graphics.Color.parseColor(safeHex))
     } catch (e: Exception) {
         fallback
     }
 }
+
+// 👇 VECTOR DE SOPORTE: Declaración privada para evitar colisiones de classpath o ambigüedad de imports [txt]
+private val StarBorderIcon: ImageVector
+    get() {
+        val existing = _starBorderIcon
+        if (existing != null) return existing
+        val newVector = ImageVector.Builder(
+            name = "StarBorder",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).path(
+            pathFillType = PathFillType.EvenOdd // Mapeado correcto de tipo de empaque [txt]
+        ) {
+            moveTo(22f, 9.24f)
+            lineTo(14.81f, 8.62f)
+            lineTo(12f, 2f)
+            lineTo(9.19f, 8.63f)
+            lineTo(2f, 9.24f)
+            lineTo(7.46f, 13.97f)
+            lineTo(5.82f, 21f)
+            lineTo(12f, 17.27f)
+            lineTo(18.18f, 21f)
+            lineTo(16.55f, 13.97f)
+            lineTo(22f, 9.24f)
+            close()
+
+            moveTo(12f, 15.4f)
+            lineTo(8.24f, 17.67f)
+            lineTo(9.24f, 13.39f)
+            lineTo(5.92f, 10.51f)
+            lineTo(10.3f, 10.13f)
+            lineTo(12f, 6.1f)
+            lineTo(13.71f, 10.14f)
+            lineTo(18.09f, 10.52f)
+            lineTo(14.77f, 13.4f)
+            lineTo(15.77f, 17.68f)
+            lineTo(12f, 15.4f)
+            close()
+        }.build()
+        _starBorderIcon = newVector
+        return newVector
+    }
+
+private var _starBorderIcon: ImageVector? = null

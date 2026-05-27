@@ -24,6 +24,7 @@ data class DiaReciente(
     val fecha: String,
     val sheetId: String
 )
+// (SheetResponse, ViajesAgregadosResponse y DiaReciente continúan idénticos)
 
 data class ViajeIntegrado(
     val idUnico: String,
@@ -40,14 +41,18 @@ data class ViajeIntegrado(
     val chofer: String,
     val ultimoTracking: String,
     val colorHexA: String?,
-    val colorHexHx: String?
+    val colorHexHx: String?,
+    val nViaje: String,
+    val llegadaPlanta: String,
+    val horarioVacio: String
 )
 
 data class ParadaViaje(
     val destino: String,
     val producto: String,
     val cantidad: String,
-    val cisternado: String
+    val cisternado: String,
+    val direccion: String
 )
 
 interface ApiService {
