@@ -18,12 +18,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,7 +38,9 @@ import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -48,7 +54,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permiso concedido
+            // Permiso concedido con éxito
         }
     }
 
@@ -85,7 +91,7 @@ class MainActivity : ComponentActivity() {
 fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
     var showHistorial by remember { mutableStateOf(false) }
 
-    // 👇 GESTALT - Continuidad: La TopAppBar se extrae de los estados para evitar parpadeos superiores [txt]
+    // 👇 GESTALT - Continuidad: La TopAppBar y el buscador se extraen de los estados para evitar parpadeos [txt]
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
@@ -112,9 +118,16 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         )
 
+        // 👇 NUEVO: Buscador Universal Focalizado colocado antes de las TabRows [txt]
+        val searchQuery by viewModel.searchQuery.collectAsState()
+        BuscadorFocalizado(
+            query = searchQuery,
+            onQueryChanged = { viewModel.updateSearchQuery(it) }
+        )
+
         when (state) {
             is UiState.Loading -> {
-                // 👇 SKELETON LOADER INICIAL: Reduce la incertidumbre táctil mientras impacta el Fetch Rápido [txt]
+                // SKELETON LOADER INICIAL: Reduce la incertidumbre táctil mientras impacta el Fetch Rápido [txt]
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(4) {
                         SkeletonViajeCard()
@@ -257,6 +270,53 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
             }
         }
     }
+}
+
+// 👇 NUEVO: Componente del Buscador con anclaje visual (Gestalt) [txt]
+@Composable
+fun ColumnScope.BuscadorFocalizado(
+    query: String,
+    onQueryChanged: (String) -> Unit
+) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChanged,
+        modifier = Modifier
+            .fillMaxWidth(0.92f)
+            .padding(vertical = 8.dp)
+            .align(Alignment.CenterHorizontally),
+        placeholder = {
+            Text(
+                "Buscar UT, Patente, TD o Chofer...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Buscar",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChanged("") }) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Limpiar",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(24.dp), // Diseño de cápsula de alta simetría [txt]
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() })
+    )
 }
 
 // 👇 NUEVO: Componente estructural de Skeleton para mitigar la recreación de layouts [txt]
