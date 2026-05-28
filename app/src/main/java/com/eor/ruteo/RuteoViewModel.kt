@@ -29,7 +29,6 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ViajesGuardadosRepository(application)
 
-    // 👇 NUEVO: Flujos de estado locales para reactividad del buscador [txt]
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
@@ -45,7 +44,7 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptySet()
         )
 
-    // 👇 COMPILADOR REACTIVO: Combina instantáneamente la query del buscador con la caché de red [txt]
+    // Combinador de flujo reactivo en vivo de alta velocidad
     val uiState: StateFlow<UiState> = combine(
         _isLoading,
         _errorMessage,
@@ -57,7 +56,6 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
             error != null -> UiState.Error(error)
             loading -> UiState.Loading
             else -> {
-                // Filtro universal dinámico Gestalt en segundo plano [txt]
                 val viajesFiltrados = if (query.isBlank()) {
                     viajes
                 } else {
@@ -90,7 +88,6 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
         iniciarSincronizacionEnVivo()
     }
 
-    // 👇 NUEVO: Disparador del cambio de query para el TextField [txt]
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -105,70 +102,45 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // 👇 REFACTORIZADO: Bucle simple de polling que consume la caché instantánea del BFF [txt]
     private fun iniciarSincronizacionEnVivo() {
         viewModelScope.launch {
-            var esPrimerCarga = true
-
             while (isActive) {
                 try {
-                    if (esPrimerCarga) {
-                        // 1. Fetch Rápido (limit=1) para TTI sub-segundo [txt]
-                        val responseFast = NetworkClient.api.getViajesRecientes(masterIndexSheetId, limit = 1)
-                        if (responseFast.success) {
-                            _diasDisponibles.value = responseFast.diasDisponibles
-                            _viajesRaw.value = responseFast.data
-                            ultimaListaViajes = responseFast.data
-                            _isLoading.value = false
-                            _errorMessage.value = null
-                            esPrimerCarga = false
-                        }
+                    val response = NetworkClient.api.getViajesRecientes(masterIndexSheetId)
+                    if (response.success) {
+                        val todosLosViajes = response.data
 
-                        // 2. Fetch Profundo (limit=10) en segundo plano diferido [txt]
-                        launch {
-                            try {
-                                val responseDeep = NetworkClient.api.getViajesRecientes(masterIndexSheetId, limit = 10)
-                                if (responseDeep.success) {
-                                    _diasDisponibles.value = responseDeep.diasDisponibles
-                                    _viajesRaw.value = responseDeep.data
-                                    ultimaListaViajes = responseDeep.data
-                                    _isLoading.value = false
-                                    _errorMessage.value = null
-                                }
-                            } catch (e: Exception) {
-                                // Silenciado para resguardo del primer render
-                            }
-                        }
-                    } else {
-                        // 3. Polling Periódico (limit=10) cada 30 segundos
-                        val response = NetworkClient.api.getViajesRecientes(masterIndexSheetId, limit = 10)
-                        if (response.success) {
-                            val todosLosViajes = response.data
+                        // Comparación histórica para lanzar notificaciones de favoritos
+                        if (ultimaListaViajes.isNotEmpty()) {
+                            val guardados = viajesGuardados.value
+                            todosLosViajes.forEach { nuevoViaje ->
+                                if (nuevoViaje.idUnico in guardados) {
+                                    val viejoViaje = ultimaListaViajes.find { it.idUnico == nuevoViaje.idUnico }
+                                    if (viejoViaje != null) {
+                                        val estadoNuevo = nuevoViaje.estadoUt.trim()
+                                        val estadoViejo = viejoViaje.estadoUt.trim()
 
-                            if (ultimaListaViajes.isNotEmpty()) {
-                                val guardados = viajesGuardados.value
-                                todosLosViajes.forEach { nuevoViaje ->
-                                    if (nuevoViaje.idUnico in guardados) {
-                                        val viejoViaje = ultimaListaViajes.find { it.idUnico == nuevoViaje.idUnico }
-                                        if (viejoViaje != null) {
-                                            val estadoNuevo = nuevoViaje.estadoUt.trim()
-                                            val estadoViejo = viejoViaje.estadoUt.trim()
-
-                                            if (estadoNuevo != estadoViejo && estadoNuevo.isNotEmpty()) {
-                                                NotificacionHelper.mostrarNotificacionCambioEstado(
-                                                    getApplication(),
-                                                    nuevoViaje
-                                                )
-                                            }
+                                        if (estadoNuevo != estadoViejo && estadoNuevo.isNotEmpty()) {
+                                            NotificacionHelper.mostrarNotificacionCambioEstado(
+                                                getApplication(),
+                                                nuevoViaje
+                                            )
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            _diasDisponibles.value = response.diasDisponibles
-                            _viajesRaw.value = todosLosViajes
-                            ultimaListaViajes = todosLosViajes
+                        _diasDisponibles.value = response.diasDisponibles
+                        _viajesRaw.value = todosLosViajes
+                        ultimaListaViajes = todosLosViajes
+                        _isLoading.value = false
+                        _errorMessage.value = null
+                    } else {
+                        if (_viajesRaw.value.isEmpty()) {
+                            _errorMessage.value = "No se pudieron consolidar los datos de ruteo."
                             _isLoading.value = false
-                            _errorMessage.value = null
                         }
                     }
                 } catch (e: Exception) {

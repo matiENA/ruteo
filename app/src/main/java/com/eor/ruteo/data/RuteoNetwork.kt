@@ -5,7 +5,6 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Path
-import retrofit2.http.Query // Importación para el Query Parameter [txt]
 import java.util.concurrent.TimeUnit
 
 data class SheetResponse(
@@ -14,7 +13,6 @@ data class SheetResponse(
     val data: List<List<String>> = emptyList()
 )
 
-// 👇 NUEVO: Modelo que mapea la respuesta consolidada del agregador del BFF
 data class ViajesAgregadosResponse(
     val success: Boolean,
     val diasDisponibles: List<DiaReciente> = emptyList(),
@@ -25,10 +23,6 @@ data class DiaReciente(
     val fecha: String,
     val sheetId: String
 )
-// (SheetResponse, ViajesAgregadosResponse y DiaReciente continúan idénticos)
-
-// ... (Dentro de RuteoNetwork.kt, actualiza la firma de tu clase principal)
-
 
 data class ViajeIntegrado(
     val idUnico: String,
@@ -72,11 +66,9 @@ interface ApiService {
         @Path("spreadsheetId") spreadsheetId: String
     ): ViajesAgregadosResponse
 
-    // 👇 ACTUALIZADO: Petición con query param limit opcional para Lazy Fetching [txt]
     @GET("api/viajes-recientes/{masterIndexSheetId}")
     suspend fun getViajesRecientes(
-        @Path("masterIndexSheetId") masterIndexSheetId: String,
-        @Query("limit") limit: Int?
+        @Path("masterIndexSheetId") masterIndexSheetId: String
     ): ViajesAgregadosResponse
 }
 
