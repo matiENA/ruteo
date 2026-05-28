@@ -41,8 +41,10 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
     private val masterIndexSheetId = "1ny9yOftgyYWfzJFpQ9h8l2T_owDlyMV_HdEgeQ5Gm8E"
     private var listaDias = listOf<DiaReciente>()
 
+    // 👇 NUEVO: Historial en memoria del último ciclo para rastrear cambios en caliente
+    private var ultimaListaViajes: List<ViajeIntegrado> = emptyList()
+
     init {
-        // 👇 NUEVO: Iniciamos la sincronización en vivo mediante un demonio de polling silencioso
         iniciarSincronizacionEnVivo()
     }
 
@@ -56,7 +58,6 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 👇 NUEVO: Bucle asíncrono robusto para sincronización continua sin congelamientos de UI
     private fun iniciarSincronizacionEnVivo() {
         viewModelScope.launch {
             while (isActive) {
@@ -66,25 +67,47 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
                         listaDias = response.diasDisponibles
                         val todosLosViajes = response.data
 
+                        // 👇 DETECCIÓN DE CAMBIOS EN CALIENTE: Solo evalúa si ya existía una carga previa
+                        if (ultimaListaViajes.isNotEmpty()) {
+                            val guardados = viajesGuardados.value
+
+                            todosLosViajes.forEach { nuevoViaje ->
+                                // Regla: Evaluar únicamente los marcados para seguimiento (Favoritos) [txt]
+                                if (nuevoViaje.idUnico in guardados) {
+                                    val viejoViaje = ultimaListaViajes.find { it.idUnico == nuevoViaje.idUnico }
+                                    if (viejoViaje != null) {
+                                        val estadoNuevo = nuevoViaje.estadoUt.trim()
+                                        val estadoViejo = viejoViaje.estadoUt.trim()
+
+                                        // Dispara alerta solo ante cambios de estado reales y no vacíos
+                                        if (estadoNuevo != estadoViejo && estadoNuevo.isNotEmpty()) {
+                                            NotificacionHelper.mostrarNotificacionCambioEstado(
+                                                getApplication(),
+                                                nuevoViaje
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Conserva la referencia actual para el próximo ciclo de pooling
+                        ultimaListaViajes = todosLosViajes
+
                         val activos = todosLosViajes.filter { !it.isCompletado }
                         val finalizados = todosLosViajes.filter { it.isCompletado }
 
-                        // Actualización de estado fluida
                         _uiState.value = UiState.Success(response.diasDisponibles, activos, finalizados)
                     } else {
-                        // En caso de falla, si ya tenemos datos previos en caché, evitamos pisarlos con estados de error
                         if (_uiState.value is UiState.Loading) {
                             _uiState.value = UiState.Error("No se pudieron consolidar los datos de ruteo.")
                         }
                     }
                 } catch (e: Exception) {
-                    // Micro-cortes de red son silenciados para preservar la caché activa en pantalla
                     if (_uiState.value is UiState.Loading) {
                         _uiState.value = UiState.Error("Error de comunicación: ${e.message}")
                     }
                 }
-
-                // delay de 30 segundos entre ciclos de sincronización
                 delay(30000)
             }
         }

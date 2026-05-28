@@ -1,8 +1,12 @@
 package com.eor.ruteo
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -26,26 +30,53 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
-import androidx.compose.ui.graphics.SolidColor // Importación del pincel de relleno sólido [txt]
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.eor.ruteo.data.ParadaViaje
 import com.eor.ruteo.data.ViajeIntegrado
 
 class MainActivity : ComponentActivity() {
     private val viewModel: RuteoViewModel by viewModels()
 
+    // 👇 Lanzador asíncrono para solicitar el permiso obligatorio de notificaciones en Android 13+ [txt]
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // El permiso ha sido concedido por el usuario [txt]
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 👇 Solicita permisos de notificaciones de forma preventiva al arrancar [txt]
+        solicitarPermisosNotificaciones()
+
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val state by viewModel.uiState.collectAsState()
                     RuteoAppScreen(state = state, viewModel = viewModel)
                 }
+            }
+        }
+    }
+
+    // 👇 Verifica de forma segura la necesidad de pedir permisos en Android 13+ (Tiramisu, API 33+) [txt]
+    private fun solicitarPermisosNotificaciones() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }
@@ -300,7 +331,7 @@ fun ViajeCardExpandible(
                 .padding(16.dp)
         ) {
             Column {
-                // 👇 PRINCIPCIO DE GESTALT: Rediseño colapsado basado en la Ley de Prägnanz y Cierre [txt]
+                // PRINCIPIO DE GESTALT: Rediseño colapsado basado en la Ley de Prägnanz y Cierre [txt]
                 if (isCompletado) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -484,93 +515,118 @@ fun ViajeCardExpandible(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                 )
                             ) {
-                                // 👇 GESTALT: Organización simétrica en dos columnas principales [txt]
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Top
+                                        .padding(12.dp)
                                 ) {
-                                    // Columna Izquierda: Compartimento Cisternado Gigante (Anclaje visual como FIGURA) [txt]
-                                    Column(
-                                        modifier = Modifier
-                                            .width(70.dp)
-                                            .padding(end = 8.dp),
-                                        horizontalAlignment = Alignment.Start
+                                    val destinoFiltrado = remember(destino) {
+                                        destino.split(" - ").last().trim()
+                                    }
+
+                                    // 👇 BLOQUE DE RENDERIZADO REESTRUCTURADO (Gestalt y Ley de Proximidad) [txt]
+
+                                    // 1. Cabecera de Ubicación (📍 Destino + Dirección)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Place,
+                                            contentDescription = "Ubicación",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = cisternado.ifEmpty { "-" },
-                                            fontSize = 32.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            style = androidx.compose.ui.text.TextStyle(
-                                                lineHeight = 34.sp
-                                            )
+                                            text = destinoFiltrado,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = FontWeight.Bold
                                         )
                                     }
 
-                                    // Columna Derecha: Información consolidada del cliente (Ley de Proximidad) [txt]
-                                    Column(
-                                        modifier = Modifier.weight(1f)
+                                    if (direccion.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Dir.: $direccion",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.60f),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // 2. Fila de Identidad del Producto (Únicamente la insignia de combustible) [txt]
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        val destinoFiltrado = remember(destino) {
-                                            destino.split(" - ").last().trim()
-                                        }
+                                        ProductBadge(producto = producto)
+                                    }
 
+                                    // 3. Fila de Física de Carga: Separación de compartimentos de volumen [txt]
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Lado Izquierdo: Compartimentos del Cisternado (Chips dinámicos separados) [txt]
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Place,
-                                                contentDescription = "Ubicación",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = destinoFiltrado,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-
-                                        // Dirección física limpia debajo del cliente [txt]
-                                        if (direccion.isNotEmpty()) {
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = "Dir.: $direccion",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.60f),
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.height(10.dp))
-
-                                        // Fila de Producto y Cantidad
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            ProductBadge(producto = producto)
-
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = "CANT: ",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.50f)
-                                                )
-                                                Text(
-                                                    text = cantidad.ifEmpty { "-" },
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
+                                            if (cisternado.isNotEmpty()) {
+                                                val compartimentos = remember(cisternado) {
+                                                    cisternado.split(";").filter { it.isNotBlank() }
+                                                }
+                                                compartimentos.forEach { comp ->
+                                                    Surface(
+                                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        border = androidx.compose.foundation.BorderStroke(
+                                                            width = 1.dp,
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                                                        )
+                                                    ) {
+                                                        Text(
+                                                            text = comp.trim(),
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                // Fallback si no hay compartimento asignado
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Sin comp.",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
                                             }
+                                        }
+
+                                        // Lado Derecho: Volumen total de entrega como ancla visual sólida [txt]
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = cantidad.ifEmpty { "-" },
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
                                         }
                                     }
                                 }
@@ -601,8 +657,7 @@ fun ViajeCardExpandible(
             } // <--- FIN Column
         } // <--- FIN Box
     } // <--- FIN Card
-} // <--- FIN ViajeCardExpandible
-
+}
 
 // =================================================================================================
 // 👇 FUNCIONES AUXILIARES GLOBALES

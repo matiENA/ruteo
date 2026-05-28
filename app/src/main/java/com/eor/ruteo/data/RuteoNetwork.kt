@@ -26,6 +26,8 @@ data class DiaReciente(
 )
 // (SheetResponse, ViajesAgregadosResponse y DiaReciente continúan idénticos)
 
+// ... (Dentro de RuteoNetwork.kt, actualiza la firma de tu clase principal)
+
 data class ViajeIntegrado(
     val idUnico: String,
     val tractor: String,
@@ -44,7 +46,9 @@ data class ViajeIntegrado(
     val colorHexHx: String?,
     val nViaje: String,
     val llegadaPlanta: String,
-    val horarioVacio: String
+    val horarioVacio: String,
+    // 👇 NUEVO CAMPO DE CONTROL DEL ESTADO LOGÍSTICO
+    val estadoUt: String
 )
 
 data class ParadaViaje(
