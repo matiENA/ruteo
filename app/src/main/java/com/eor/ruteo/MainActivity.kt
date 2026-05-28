@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,7 +48,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permiso concedido con éxito
+            // Permiso concedido
         }
     }
 
@@ -84,40 +85,54 @@ class MainActivity : ComponentActivity() {
 fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
     var showHistorial by remember { mutableStateOf(false) }
 
-    when (state) {
-        is UiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        is UiState.Error -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error) }
-        is UiState.Success -> {
-            Column(modifier = Modifier.fillMaxSize()) {
-
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = if (showHistorial) "HISTORIAL DE VIAJES" else "RUTEO OPERATIVO",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    navigationIcon = {
-                        if (showHistorial) {
-                            IconButton(onClick = { showHistorial = false }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
-                            }
-                        }
-                    },
-                    actions = {
-                        if (!showHistorial) {
-                            IconButton(onClick = { showHistorial = true }) {
-                                Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Historial")
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    // 👇 GESTALT - Continuidad: La TopAppBar se extrae de los estados para evitar parpadeos superiores [txt]
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = if (showHistorial) "HISTORIAL DE VIAJES" else "RUTEO OPERATIVO",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
+            },
+            navigationIcon = {
+                if (showHistorial) {
+                    IconButton(onClick = { showHistorial = false }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                }
+            },
+            actions = {
+                if (!showHistorial) {
+                    IconButton(onClick = { showHistorial = true }) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = "Historial")
+                    }
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        )
 
+        when (state) {
+            is UiState.Loading -> {
+                // 👇 SKELETON LOADER INICIAL: Reduce la incertidumbre táctil mientras impacta el Fetch Rápido [txt]
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(4) {
+                        SkeletonViajeCard()
+                    }
+                }
+            }
+            is UiState.Error -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Error: ${state.message}", color = MaterialTheme.colorScheme.error)
+                }
+            }
+            is UiState.Success -> {
                 val viajesGuardados by viewModel.viajesGuardados.collectAsState()
 
                 if (showHistorial) {
+                    // ==========================================
+                    // 👇 VISTA HISTORIAL (isCompletado == true)
+                    // ==========================================
                     if (state.viajesFinalizados.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("No se registran viajes finalizados", color = MaterialTheme.colorScheme.outline)
@@ -154,6 +169,9 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
                         }
                     }
                 } else {
+                    // ==========================================
+                    // 👇 PANTALLA PRINCIPAL: VIAJES ACTIVOS (isCompletado == false)
+                    // ==========================================
                     val terminalesFijas = listOf("⭐ Guardados", "Plaza Huincul", "Dock Sud", "Sin Terminal")
                     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
@@ -241,6 +259,62 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
     }
 }
 
+// 👇 NUEVO: Componente estructural de Skeleton para mitigar la recreación de layouts [txt]
+@Composable
+fun SkeletonViajeCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                // Bloque para simular el nombre del Chofer
+                Box(
+                    modifier = Modifier
+                        .width(160.dp)
+                        .height(18.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp))
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // Bloque para simular Tractor | Semi
+                Box(
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(14.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp))
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                // Bloque para simular Viaje | Llegada
+                Box(
+                    modifier = Modifier
+                        .width(200.dp)
+                        .height(12.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp))
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Bloque para simular el número de UT gigante (Troquelado "Stub") [txt]
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp))
+            )
+        }
+    }
+}
+
 @Composable
 fun ViajeCardExpandible(
     viaje: ViajeIntegrado,
@@ -320,13 +394,11 @@ fun ViajeCardExpandible(
                 .padding(16.dp)
         ) {
             Column {
-                // 👇 REESTRUCTURACIÓN 1: Cabecera colapsada tipo "Ticket" simétrica [txt]
                 if (isCompletado) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Columna Izquierda con peso (Mantiene datos operacionales limpios de Cierre) [txt]
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = chofer.ifEmpty { "Chofer S/D" },
@@ -351,7 +423,6 @@ fun ViajeCardExpandible(
                             }
                         }
 
-                        // Columna Derecha aislada (N° UT Gigante + Estrella) [txt]
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(start = 16.dp)
@@ -378,7 +449,6 @@ fun ViajeCardExpandible(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Columna Izquierda con peso para empujar la UT a la derecha [txt]
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = chofer.ifEmpty { "Chofer S/D" },
@@ -398,7 +468,7 @@ fun ViajeCardExpandible(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Viaje: ${nViaje.ifEmpty { "S/D" }} | Llegada: ${llegadaPlanta.ifEmpty { "S/D" }}",
+                                text = "Viaje: $nViaje | Llegada: $llegadaPlanta",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.Medium
@@ -412,7 +482,6 @@ fun ViajeCardExpandible(
                             )
                         }
 
-                        // Columna Derecha ("Stub" de Unidad de alta jerarquía visual) [txt]
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(start = 16.dp)
@@ -488,7 +557,6 @@ fun ViajeCardExpandible(
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
 
-                            // Sanitización preventiva del modelo ParadaViaje
                             val destino = (parada.destino as? String?).orEmpty()
                             val producto = (parada.producto as? String?).orEmpty()
                             val cantidad = (parada.cantidad as? String?).orEmpty()
@@ -591,7 +659,6 @@ fun ViajeCardExpandible(
                                                     }
                                                 }
                                             } else {
-                                                // Fallback si no hay compartimento asignado
                                                 Surface(
                                                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                                                     shape = RoundedCornerShape(4.dp)
@@ -606,7 +673,6 @@ fun ViajeCardExpandible(
                                             }
                                         }
 
-                                        // Lado Derecho: Volumen total de entrega como ancla visual sólida
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -712,7 +778,6 @@ private fun parsearColorHexSeguro(hex: String?, fallback: Color): Color {
     }
 }
 
-// 👇 VECTOR DE SOPORTE: Corregido con SolidColor para evitar que el icono desaparezca en inactivo
 private val StarBorderIcon: ImageVector
     get() {
         val existing = _starBorderIcon
@@ -724,7 +789,7 @@ private val StarBorderIcon: ImageVector
             viewportWidth = 24f,
             viewportHeight = 24f
         ).path(
-            fill = SolidColor(Color.Black), // 👈 SOLUCIÓN CLAVE: Añadimos un relleno para pintar los píxeles [txt]
+            fill = SolidColor(Color.Black),
             pathFillType = PathFillType.EvenOdd
         ) {
             moveTo(22f, 9.24f)

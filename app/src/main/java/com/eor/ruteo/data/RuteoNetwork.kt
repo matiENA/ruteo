@@ -5,6 +5,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.Query // Importación para el Query Parameter [txt]
 import java.util.concurrent.TimeUnit
 
 data class SheetResponse(
@@ -71,10 +72,11 @@ interface ApiService {
         @Path("spreadsheetId") spreadsheetId: String
     ): ViajesAgregadosResponse
 
-    // 👇 LA LLAMADA AL NUEVO AGREGADOR BFF (Petición Única)
+    // 👇 ACTUALIZADO: Petición con query param limit opcional para Lazy Fetching [txt]
     @GET("api/viajes-recientes/{masterIndexSheetId}")
     suspend fun getViajesRecientes(
-        @Path("masterIndexSheetId") masterIndexSheetId: String
+        @Path("masterIndexSheetId") masterIndexSheetId: String,
+        @Query("limit") limit: Int?
     ): ViajesAgregadosResponse
 }
 
