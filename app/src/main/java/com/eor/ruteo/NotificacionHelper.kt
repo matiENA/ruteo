@@ -12,7 +12,6 @@ object NotificacionHelper {
     private const val CHANNEL_NAME = "Cambios de Estado Críticos"
     private const val CHANNEL_DESC = "Notificaciones de cambios en viajes guardados"
 
-    // 👇 OPTIMIZADO: Eliminado chequeo innecesario de SDK_INT >= 26 ya que tu minSDK es >= 26 [txt]
     fun crearCanalNotificaciones(context: Context) {
         val importance = NotificationManager.IMPORTANCE_HIGH
         val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
@@ -27,17 +26,35 @@ object NotificacionHelper {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val title = "[UT: ${viaje.numeroUt}] ${viaje.tractor} ➔ ${viaje.estadoUt.uppercase()}"
-        val body = "TD: ${viaje.numDespacho} | Viaje: ${viaje.nViaje} | Semi: ${viaje.semi}"
+        // Sanitización defensiva de datos a nivel de JVM
+        val numeroUt = (viaje.numeroUt as? String?).orEmpty().ifEmpty { "S/D" }
+        val chofer = (viaje.chofer as? String?).orEmpty().ifEmpty { "Chofer S/D" }
+        val tractor = (viaje.tractor as? String?).orEmpty().ifEmpty { "S/D" }
+        val semi = (viaje.semi as? String?).orEmpty().ifEmpty { "S/D" }
+        val nViaje = (viaje.nViaje as? String?).orEmpty().ifEmpty { "S/D" }
+        val numDespacho = (viaje.numDespacho as? String?).orEmpty().ifEmpty { "S/N" }
+        val horarioVacio = (viaje.horarioVacio as? String?).orEmpty().ifEmpty { "Pendiente" }
+
+        // 👇 REQUERIMIENTO 2: Título simétrico con la cabecera física [txt]
+        val title = "[UT: $numeroUt] $chofer"
+
+        // Estructuración textual multilínea de alta proximidad [txt]
+        val bigTextBody = """
+            $tractor | $semi | Viaje: $nViaje
+            TD: $numDespacho
+            VACIO: $horarioVacio
+        """.trimIndent()
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Icono nativo del sistema [txt]
             .setContentTitle(title)
-            .setContentText(body)
+            .setContentText("$tractor | $semi | Viaje: $nViaje") // Resumen de línea única para pantallas bloqueadas
+            // 👇 CRÍTICO: Estilo BigTextStyle que evita la mutilación de texto por el SO en la bandeja [txt]
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigTextBody))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 
-        val notificationId = viaje.numDespacho.hashCode()
+        val notificationId = numDespacho.hashCode()
         notificationManager.notify(notificationId, builder.build())
     }
 }

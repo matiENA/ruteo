@@ -43,19 +43,17 @@ import com.eor.ruteo.data.ViajeIntegrado
 class MainActivity : ComponentActivity() {
     private val viewModel: RuteoViewModel by viewModels()
 
-    // 👇 Lanzador asíncrono para solicitar el permiso obligatorio de notificaciones en Android 13+ [txt]
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // El permiso ha sido concedido por el usuario [txt]
+            // Permiso concedido con éxito
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 👇 Solicita permisos de notificaciones de forma preventiva al arrancar [txt]
         solicitarPermisosNotificaciones()
 
         setContent {
@@ -68,7 +66,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 👇 Verifica de forma segura la necesidad de pedir permisos en Android 13+ (Tiramisu, API 33+) [txt]
     private fun solicitarPermisosNotificaciones() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -93,7 +90,6 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
         is UiState.Success -> {
             Column(modifier = Modifier.fillMaxSize()) {
 
-                // TopAppBar adaptativo a la navegación del Historial (AutoMirrored)
                 TopAppBar(
                     title = {
                         Text(
@@ -122,9 +118,6 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
                 val viajesGuardados by viewModel.viajesGuardados.collectAsState()
 
                 if (showHistorial) {
-                    // ==========================================
-                    // 👇 VISTA SECUNDARIA: HISTORIAL DE VIAJES (isCompletado == true)
-                    // ==========================================
                     if (state.viajesFinalizados.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("No se registran viajes finalizados", color = MaterialTheme.colorScheme.outline)
@@ -161,9 +154,6 @@ fun RuteoAppScreen(state: UiState, viewModel: RuteoViewModel) {
                         }
                     }
                 } else {
-                    // ==========================================
-                    // 👇 PANTALLA PRINCIPAL: VIAJES ACTIVOS (isCompletado == false)
-                    // ==========================================
                     val terminalesFijas = listOf("⭐ Guardados", "Plaza Huincul", "Dock Sud", "Sin Terminal")
                     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
@@ -259,7 +249,6 @@ fun ViajeCardExpandible(
 ) {
     var isExpanded by remember { mutableStateOf(false) }
 
-    // Repositorio defensivo de tipos de plataforma nulos en tiempo de ejecución [txt]
     val numeroUt = remember(viaje.numeroUt) { (viaje.numeroUt as? String?).orEmpty() }
     val chofer = remember(viaje.chofer) { (viaje.chofer as? String?).orEmpty() }
     val tractor = remember(viaje.tractor) { (viaje.tractor as? String?).orEmpty() }
@@ -331,28 +320,13 @@ fun ViajeCardExpandible(
                 .padding(16.dp)
         ) {
             Column {
-                // PRINCIPIO DE GESTALT: Rediseño colapsado basado en la Ley de Prägnanz y Cierre [txt]
+                // 👇 REESTRUCTURACIÓN 1: Cabecera colapsada tipo "Ticket" simétrica [txt]
                 if (isCompletado) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // N° Unidad Gigante (Anclaje de Identificación)
-                        Text(
-                            text = numeroUt.ifEmpty { "S/D" },
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .padding(end = 16.dp)
-                                .widthIn(min = 65.dp),
-                            style = androidx.compose.ui.text.TextStyle(
-                                lineHeight = 40.sp,
-                                letterSpacing = (-1).sp
-                            )
-                        )
-
-                        // Mensaje unificado de Cierre: Oculta datos irrelevantes [txt]
+                        // Columna Izquierda con peso (Mantiene datos operacionales limpios de Cierre) [txt]
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = chofer.ifEmpty { "Chofer S/D" },
@@ -377,13 +351,26 @@ fun ViajeCardExpandible(
                             }
                         }
 
-                        IconButton(onClick = onGuardarToggle) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = "Guardar viaje",
-                                tint = if (isGuardado) Color(0xFFFFD700) else Color(0xFFD3D3D3), // Tono gris claro d3d3d3 sólido [txt]
-                                modifier = Modifier.size(28.dp)
+                        // Columna Derecha aislada (N° UT Gigante + Estrella) [txt]
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 16.dp)
+                        ) {
+                            Text(
+                                text = numeroUt.ifEmpty { "S/D" },
+                                style = MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = onGuardarToggle) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "Guardar viaje",
+                                    tint = if (isGuardado) Color(0xFFFFD700) else Color(0xFFD3D3D3),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 } else {
@@ -391,21 +378,7 @@ fun ViajeCardExpandible(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // N° Unidad Gigante
-                        Text(
-                            text = numeroUt.ifEmpty { "S/D" },
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .padding(end = 16.dp)
-                                .widthIn(min = 65.dp),
-                            style = androidx.compose.ui.text.TextStyle(
-                                lineHeight = 40.sp,
-                                letterSpacing = (-1).sp
-                            )
-                        )
-
+                        // Columna Izquierda con peso para empujar la UT a la derecha [txt]
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = chofer.ifEmpty { "Chofer S/D" },
@@ -423,24 +396,42 @@ fun ViajeCardExpandible(
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
                             )
-
                             Spacer(modifier = Modifier.height(2.dp))
-                            // Fila secundaria discreta para viaje activo
                             Text(
                                 text = "Viaje: ${nViaje.ifEmpty { "S/D" }} | Llegada: ${llegadaPlanta.ifEmpty { "S/D" }}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                                 fontWeight = FontWeight.Medium
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "TD: ${numDespacho.ifEmpty { "S/N" }}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
-                        IconButton(onClick = onGuardarToggle) {
-                            Icon(
-                                imageVector = if (isGuardado) Icons.Default.Star else StarBorderIcon,
-                                contentDescription = "Guardar viaje",
-                                tint = if (isGuardado) Color(0xFFFFD700) else Color(0xFFD3D3D3), // Tono gris claro d3d3d3 sólido [txt]
-                                modifier = Modifier.size(28.dp)
+                        // Columna Derecha ("Stub" de Unidad de alta jerarquía visual) [txt]
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 16.dp)
+                        ) {
+                            Text(
+                                text = numeroUt.ifEmpty { "S/D" },
+                                style = MaterialTheme.typography.displaySmall,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = onGuardarToggle) {
+                                Icon(
+                                    imageVector = if (isGuardado) Icons.Default.Star else StarBorderIcon,
+                                    contentDescription = "Guardar viaje",
+                                    tint = if (isGuardado) Color(0xFFFFD700) else Color(0xFFD3D3D3),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -524,8 +515,6 @@ fun ViajeCardExpandible(
                                         destino.split(" - ").last().trim()
                                     }
 
-                                    // 👇 BLOQUE DE RENDERIZADO REESTRUCTURADO (Gestalt y Ley de Proximidad) [txt]
-
                                     // 1. Cabecera de Ubicación (📍 Destino + Dirección)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -558,7 +547,7 @@ fun ViajeCardExpandible(
 
                                     Spacer(modifier = Modifier.height(10.dp))
 
-                                    // 2. Fila de Identidad del Producto (Únicamente la insignia de combustible) [txt]
+                                    // 2. Fila de Identidad del Producto (Únicamente la insignia de combustible)
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalAlignment = Alignment.CenterVertically
@@ -566,7 +555,7 @@ fun ViajeCardExpandible(
                                         ProductBadge(producto = producto)
                                     }
 
-                                    // 3. Fila de Física de Carga: Separación de compartimentos de volumen [txt]
+                                    // 3. Fila de Física de Carga: Separación de compartimentos de volumen
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -574,7 +563,7 @@ fun ViajeCardExpandible(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Lado Izquierdo: Compartimentos del Cisternado (Chips dinámicos separados) [txt]
+                                        // Lado Izquierdo: Compartimentos del Cisternado (Chips dinámicos separados)
                                         Row(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             verticalAlignment = Alignment.CenterVertically
@@ -617,7 +606,7 @@ fun ViajeCardExpandible(
                                             }
                                         }
 
-                                        // Lado Derecho: Volumen total de entrega como ancla visual sólida [txt]
+                                        // Lado Derecho: Volumen total de entrega como ancla visual sólida
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
@@ -657,7 +646,8 @@ fun ViajeCardExpandible(
             } // <--- FIN Column
         } // <--- FIN Box
     } // <--- FIN Card
-}
+} // <--- FIN ViajeCardExpandible
+
 
 // =================================================================================================
 // 👇 FUNCIONES AUXILIARES GLOBALES
@@ -722,7 +712,7 @@ private fun parsearColorHexSeguro(hex: String?, fallback: Color): Color {
     }
 }
 
-// 👇 VECTOR DE SOPORTE: Corregido con SolidColor para evitar que el icono desaparezca en inactivo [txt]
+// 👇 VECTOR DE SOPORTE: Corregido con SolidColor para evitar que el icono desaparezca en inactivo
 private val StarBorderIcon: ImageVector
     get() {
         val existing = _starBorderIcon
