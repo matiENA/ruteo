@@ -26,31 +26,42 @@ object NotificacionHelper {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // Sanitización defensiva de datos a nivel de JVM
-        val numeroUt = (viaje.numeroUt as? String?).orEmpty().ifEmpty { "S/D" }
-        val chofer = (viaje.chofer as? String?).orEmpty().ifEmpty { "Chofer S/D" }
-        val tractor = (viaje.tractor as? String?).orEmpty().ifEmpty { "S/D" }
-        val semi = (viaje.semi as? String?).orEmpty().ifEmpty { "S/D" }
-        val nViaje = (viaje.nViaje as? String?).orEmpty().ifEmpty { "S/D" }
-        val numDespacho = (viaje.numDespacho as? String?).orEmpty().ifEmpty { "S/N" }
-        val horarioVacio = (viaje.horarioVacio as? String?).orEmpty().ifEmpty { "Pendiente" }
+        // 👇 DEFENSA EXTREMA: Sanitización preventiva contra tipos de plataforma nulos en segundo plano [txt]
+        val numeroUt = (viaje.numeroUt as? String?).orEmpty().trim().ifEmpty { "S/D" }
+        val chofer = (viaje.chofer as? String?).orEmpty().trim().ifEmpty { "Chofer S/D" }
+        val tractor = (viaje.tractor as? String?).orEmpty().trim().ifEmpty { "S/D" }
+        val semi = (viaje.semi as? String?).orEmpty().trim().ifEmpty { "S/D" }
+        val nViaje = (viaje.nViaje as? String?).orEmpty().trim().ifEmpty { "S/D" }
+        val numDespacho = (viaje.numDespacho as? String?).orEmpty().trim().ifEmpty { "S/N" }
 
-        // 👇 REQUERIMIENTO 2: Título simétrico con la cabecera física [txt]
+        // Conservamos los valores crudos para la evaluación condicional estricta [txt]
+        val rawHorarioVacio = (viaje.horarioVacio as? String?).orEmpty().trim()
+        val rawEstadoUt = (viaje.estadoUt as? String?).orEmpty().trim()
+
+        // Título de la alerta unificado con formato simétrico [txt]
         val title = "[UT: $numeroUt] $chofer"
 
-        // Estructuración textual multilínea de alta proximidad [txt]
+        // 👇 LÓGICA DE PRIORIDAD DEFENSIVA: Fuente de la Verdad Absoluta [txt]
+        val lineaEstado = if (rawHorarioVacio.isNotEmpty()) {
+            // Prioridad 1: Si hay horario de vacío, el viaje está finalizado sin importar lo que diga estadoUt [txt]
+            "VACIO: $rawHorarioVacio"
+        } else {
+            // Prioridad 2: Si no hay horario de vacío, confiamos en la columna ESTADOUT [txt]
+            rawEstadoUt.uppercase().ifEmpty { "PENDIENTE" }
+        }
+
+        // Estructuración multilínea simétrica en espejo con el Ticket de la UI [txt]
         val bigTextBody = """
-            $tractor | $semi | Viaje: $nViaje
+            UT: $numeroUt | $tractor | $semi | Viaje: $nViaje
             TD: $numDespacho
-            VACIO: $horarioVacio
+            $lineaEstado
         """.trimIndent()
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Icono nativo del sistema [txt]
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(title)
-            .setContentText("$tractor | $semi | Viaje: $nViaje") // Resumen de línea única para pantallas bloqueadas
-            // 👇 CRÍTICO: Estilo BigTextStyle que evita la mutilación de texto por el SO en la bandeja [txt]
-            .setStyle(NotificationCompat.BigTextStyle().bigText(bigTextBody))
+            .setContentText("$tractor | $semi | Viaje: $nViaje") // Línea de fallback para vistas colapsadas
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigTextBody)) // BigTextStyle para evitar mutilaciones [txt]
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 
