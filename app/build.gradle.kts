@@ -57,6 +57,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // Firebase Cloud Messaging para recepción asíncrona de alertas Push [txt]
+    implementation("com.google.firebase:firebase-messaging-ktx:24.0.0")
 
     // 2. TUS HERRAMIENTAS PARA RUTEO (Red y Estado)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")

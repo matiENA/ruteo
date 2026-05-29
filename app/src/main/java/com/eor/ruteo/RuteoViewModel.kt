@@ -1,11 +1,13 @@
 package com.eor.ruteo
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.eor.ruteo.data.DiaReciente
 import com.eor.ruteo.data.NetworkClient
 import com.eor.ruteo.data.ViajeIntegrado
+import com.google.firebase.messaging.FirebaseMessaging // 👇 CORREGIDO: API NATIVA COMPILATION-SAFE [txt]
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,7 +46,6 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptySet()
         )
 
-    // Combinador de flujo reactivo en vivo de alta velocidad
     val uiState: StateFlow<UiState> = combine(
         _isLoading,
         _errorMessage,
@@ -95,6 +96,30 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleGuardarViaje(idUnico: String) {
         viewModelScope.launch {
             try {
+                val viaje = _viajesRaw.value.find { it.idUnico == idUnico }
+                if (viaje != null && viaje.numeroUt.isNotEmpty()) {
+                    val isGuardadoActualmente = idUnico in viajesGuardados.value
+                    val topic = "ut_${viaje.numeroUt}"
+
+                    if (isGuardadoActualmente) {
+                        // 👇 CORREGIDO: Uso de FirebaseMessaging nativo libre de errores de classpath [txt]
+                        FirebaseMessaging.getInstance().unsubscribeFromTopic(topic)
+                            .addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    Log.d("FCM_SUBSCRIBE", "Desuscripción exitosa de: $topic")
+                                }
+                            }
+                    } else {
+                        // 👇 CORREGIDO: Uso de FirebaseMessaging nativo libre de errores de classpath [txt]
+                        FirebaseMessaging.getInstance().subscribeToTopic(topic)
+                            .addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    Log.d("FCM_SUBSCRIBE", "Suscripción exitosa a: $topic")
+                                }
+                            }
+                    }
+                }
+
                 repository.toggleViajeGuardado(idUnico)
             } catch (e: Exception) {
                 // Silenciado defensivo de persistencia local
@@ -102,45 +127,52 @@ class RuteoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 👇 REFACTORIZADO: Bucle simple de polling que consume la caché instantánea del BFF [txt]
     private fun iniciarSincronizacionEnVivo() {
         viewModelScope.launch {
+            var esPrimerCarga = true
+
             while (isActive) {
                 try {
-                    val response = NetworkClient.api.getViajesRecientes(masterIndexSheetId)
-                    if (response.success) {
-                        val todosLosViajes = response.data
+                    if (esPrimerCarga) {
+                        val responseFast = NetworkClient.api.getViajesRecientes(masterIndexSheetId)
+                        if (responseFast.success) {
+                            _diasDisponibles.value = responseFast.diasDisponibles
+                            _viajesRaw.value = responseFast.data
+                            ultimaListaViajes = responseFast.data
+                            _isLoading.value = false
+                            _errorMessage.value = null
+                            esPrimerCarga = false
+                        }
+                    } else {
+                        val response = NetworkClient.api.getViajesRecientes(masterIndexSheetId)
+                        if (response.success) {
+                            val todosLosViajes = response.data
 
-                        // Comparación histórica para lanzar notificaciones de favoritos
-                        if (ultimaListaViajes.isNotEmpty()) {
-                            val guardados = viajesGuardados.value
-                            todosLosViajes.forEach { nuevoViaje ->
-                                if (nuevoViaje.idUnico in guardados) {
-                                    val viejoViaje = ultimaListaViajes.find { it.idUnico == nuevoViaje.idUnico }
-                                    if (viejoViaje != null) {
-                                        val estadoNuevo = nuevoViaje.estadoUt.trim()
-                                        val estadoViejo = viejoViaje.estadoUt.trim()
+                            if (ultimaListaViajes.isNotEmpty()) {
+                                val guardados = viajesGuardados.value
+                                todosLosViajes.forEach { nuevoViaje ->
+                                    if (nuevoViaje.idUnico in guardados) {
+                                        val viejoViaje = ultimaListaViajes.find { it.idUnico == nuevoViaje.idUnico }
+                                        if (viejoViaje != null) {
+                                            val estadoNuevo = nuevoViaje.estadoUt.trim()
+                                            val estadoViejo = viejoViaje.estadoUt.trim()
 
-                                        if (estadoNuevo != estadoViejo && estadoNuevo.isNotEmpty()) {
-                                            NotificacionHelper.mostrarNotificacionCambioEstado(
-                                                getApplication(),
-                                                nuevoViaje
-                                            )
+                                            if (estadoNuevo != estadoViejo && estadoNuevo.isNotEmpty()) {
+                                                NotificacionHelper.mostrarNotificacionCambioEstado(
+                                                    getApplication(),
+                                                    nuevoViaje
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        _diasDisponibles.value = response.diasDisponibles
-                        _viajesRaw.value = todosLosViajes
-                        ultimaListaViajes = todosLosViajes
-                        _isLoading.value = false
-                        _errorMessage.value = null
-                    } else {
-                        if (_viajesRaw.value.isEmpty()) {
-                            _errorMessage.value = "No se pudieron consolidar los datos de ruteo."
+                            _diasDisponibles.value = response.diasDisponibles
+                            _viajesRaw.value = todosLosViajes
+                            ultimaListaViajes = todosLosViajes
                             _isLoading.value = false
+                            _errorMessage.value = null
                         }
                     }
                 } catch (e: Exception) {
